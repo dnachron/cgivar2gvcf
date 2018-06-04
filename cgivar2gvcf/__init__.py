@@ -10,6 +10,7 @@ import gzip
 import os
 import re
 import sys
+from numpy import median
 
 import twobitreader
 from twobitreader import download as twobitdownload
@@ -32,15 +33,16 @@ FILEDATE = datetime.datetime.now()
 
 
 def make_header(reference):
-    header = """##fileformat=VCFv4.1
+    header = """##fileformat=VCFv4.2
 ##fileDate={}{}{}
-##source=cgivar2gvcf-version-0.1.6
-##description="Produced from a Complete Genomics var file using cgivar2gvcf. Not intended for clinical use."
+##source=cgivar2gvcf-version-0.1.6.1
+##description="Produced from a Complete Genomics varFile using a modified version of cgivar2gvcf" Not intended for clinical use."
 ##reference={}
-##FILTER=<ID=NOCALL,Description="Some or all of this record had no sequence call by Complete Genomics">
-##FILTER=<ID=VQLOW,Description="Some or all of this sequence call marked as low variant quality by Complete Genomics">
-##FILTER=<ID=AMBIGUOUS,Description="Some or all of this sequence call marked as ambiguous by Complete Genomics">
+##FILTER=<ID=PASS,Description="All filters passed">
 ##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=FT,Number=R,Type=String,Description="varFilter Tag (VQLOW, AMBIGUOUS, PASS, VQHIGH and NOCALL) from Complete Genomics varFile. VQHIGH is specific to CG version 2.2 or lower, in CG version 2.4 or higher the equivalent is PASS. AMBIGUOUS is specific of CG version 2.4 of higher">
+##FORMAT=<ID=VAF,Number=R,Type=Integer,Description="Positive integer representing confidence in the call as reported in the varScoreVAF of Complete Genomics. It is derived from the probability estimates under maximum likelihood variable allele fraction. This field is empty for reference calls or no-calls">
+##FORMAT=<ID=EAF,Number=R,Type=Integer,Description="Positive or negative integer representing confidence in the call as reported in the varScoreEAF of Complete Genomics. It is derived from the probability estimates under equal allele fraction model. This field is empty for reference calls or no-calls">
 ##INFO=<ID=END,Number=1,Type=Integer,Description="Stop position of the interval">
 """.format(FILEDATE.year, FILEDATE.month, FILEDATE.day, reference)
     header = header + ("#" + '\t'.join([k for k in VCF_DATA_TEMPLATE]))
@@ -75,6 +77,7 @@ def process_full_position(data, header, var_only=False):
     """
     feature_type = data[header['varType']]
     # Skip unmatchable, uncovered, or pseudoautosomal-in-X
+    # This clause will skip the N portions of the genome
     if (feature_type == 'no-ref' or feature_type.startswith('PAR-called-in-X')):
         return None
     if var_only and feature_type in ['no-call', 'ref']:
@@ -83,9 +86,16 @@ def process_full_position(data, header, var_only=False):
     filters = []
     if feature_type == 'no-call':
         filters.append('NOCALL')
+
+    # This 'if' is entered if the CG format is older than the 2.4 version
     if 'varQuality' in header:
         if 'VQLOW' in data[header['varQuality']]:
             filters.append('VQLOW')
+
+        if 'VQHIGH' in data[header['varQuality']]:
+            filters.append('VQHIGH')
+
+    # And, if the CG format is 2.4 or older version ->
     else:
         var_filter = data[header['varFilter']]
         if var_filter and not var_filter == "PASS":
@@ -97,6 +107,12 @@ def process_full_position(data, header, var_only=False):
     alleles = [data[header['alleleSeq']]]
     dbsnp_data = []
     dbsnp_data = data[header['xRef']].split(';')
+    var_scores = []
+
+    if data[header['varScoreVAF']] or data[header['varScoreEAF']]:
+        var_scores.append(data[header['varScoreVAF']])
+        var_scores.append(data[header['varScoreEAF']])
+
     assert data[header['ploidy']] in ['1', '2']
     if feature_type == 'ref' or feature_type == 'no-call':
         return [{'chrom': chrom,
@@ -104,21 +120,24 @@ def process_full_position(data, header, var_only=False):
                  'dbsnp_data': dbsnp_data,
                  'ref_seq': ref_allele,
                  'alleles': alleles,
+                 'varScores': var_scores,
                  'allele_count': data[header['ploidy']],
-                 'filters': filters,
+                 'filters': [filters],
                  'end': data[header['end']]}]
     else:
+
         return [{'chrom': chrom,
                  'start': start,
                  'dbsnp_data': dbsnp_data,
                  'ref_seq': ref_allele,
                  'alleles': alleles,
                  'allele_count': data[header['ploidy']],
-                 'filters': filters}]
+                 'varScores': var_scores,
+                 'filters': [filters]}]
 
 
 def process_allele(allele_data, dbsnp_data, header, reference):
-    """Combine data from multiple lines refering to a single allele.
+    """Combine data from multiple lines referring to a single allele.
 
     Returns three items in this order:
         (string) concatenated variant sequence (ie allele the genome has)
@@ -130,13 +149,24 @@ def process_allele(allele_data, dbsnp_data, header, reference):
     var_allele = ''
     ref_allele = ''
     filters = []
+    VAF_scores = []
+    EAF_scores = []
+    vaf_score = ''
+    eaf_score = ''
+
     for data in allele_data:
+        # This 'if' is entered if the CG format is older than the 2.4 version
+        # only two values are possible in this version: VQLOW and VQHIGH
         if 'varQuality' in header:
             if 'VQLOW' in data[header['varQuality']]:
                 filters.append('VQLOW')
+            if 'VQHIGH' in data[header['varQuality']]:
+                filters.append('VQHIGH')
+        # And, this 'else' is entered if the CG format is 2.4 or 2.5 version ->
         else:
             var_filter = data[header['varFilter']]
             if var_filter and not var_filter == "PASS":
+                # filters = filters + var_filter.split(';')
                 filters = filters + var_filter.split(';')
         if data[header['varType']] == 'no-call':
             filters = ['NOCALL']
@@ -147,12 +177,25 @@ def process_allele(allele_data, dbsnp_data, header, reference):
         if data[header['xRef']]:
             for dbsnp_item in data[header['xRef']].split(';'):
                 dbsnp_data.append(dbsnp_item.split(':')[1])
+        if data[header['varScoreVAF']] and data[header['varScoreEAF']]:
+            VAF_scores.append(int(data[header['varScoreVAF']]))
+            EAF_scores.append(int(data[header['varScoreEAF']]))
+        # gets the median value of all VAF and all EAF scores, in separate
+    if data[header['varScoreVAF']] and data[header['varScoreEAF']]:
+        vaf_score = str(int(median(VAF_scores)))
+        eaf_score = str(int(median(EAF_scores)))
+    else:
+        vaf_score = ''
+        eaf_score = ''
+    #manage gathered filters
     # It's theoretically possible to break up a partial no-call allele into
     # separated gVCF lines, but it's hard. Treat the whole allele as no-call.
     if 'NOCALL' in filters:
         filters = ['NOCALL']
         var_allele = '?'
-    return var_allele, ref_allele, start, filters
+        vaf_score = ''
+        eaf_score = ''
+    return var_allele, ref_allele, start, filters, vaf_score, eaf_score
 
 
 def get_split_pos_lines(data, cgi_input, header):
@@ -202,14 +245,17 @@ def process_split_position(data, cgi_input, header, reference, var_only=False):
 
     # Process all the lines to get concatenated sequences and other data.
     dbsnp_data = []
-    a1_seq, ref_seq, start, a1_filters = process_allele(
+
+    a1_seq, ref_seq, start, a1_filters, a1_vaf_score, a1_eaf_score = process_allele(
         allele_data=s1_data, dbsnp_data=dbsnp_data,
         header=header, reference=reference)
-    a2_seq, r2_seq, a2_start, a2_filters = process_allele(
+    a2_seq, r2_seq, a2_start, a2_filters, a2_vaf_score, a2_eaf_score = process_allele(
         allele_data=s2_data, dbsnp_data=dbsnp_data,
         header=header, reference=reference)
+
     # clean dbsnp data
     dbsnp_data = [x for x in dbsnp_data if x]
+
     if (a1_seq or ref_seq) and (a2_seq or r2_seq):
         # Check that reference sequence and positions match.
         assert ref_seq == r2_seq
@@ -220,8 +266,10 @@ def process_split_position(data, cgi_input, header, reference, var_only=False):
                    'dbsnp_data': dbsnp_data,
                    'ref_seq': ref_seq,
                    'alleles': [a1_seq, a2_seq],
+                   'varScores': [a1_vaf_score, a1_eaf_score, a2_vaf_score, a2_eaf_score],
                    'allele_count': '2',
-                   'filters': list(set(a1_filters + a2_filters))}
+                   'filters': [a1_filters, a2_filters]} # -> 'filters': list(set(a1_filters + a2_filters))}
+            # 'filters': list(set(a1_filters + a2_filters))}
         else:
             # Handle edge case: because we create full no-calls from partial
             # no-call alleles, we may end up with a full no-call region.
@@ -232,7 +280,8 @@ def process_split_position(data, cgi_input, header, reference, var_only=False):
                     'ref_seq': '=',
                     'alleles': ['?'],
                     'allele_count': '2',
-                    'filters': ['NOCALL'],
+                    'varScores': [a1_vaf_score, a1_eaf_score, a2_vaf_score, a2_eaf_score],
+                    'filters': [a1_filters, a2_filters], # before -> ['NOCALL']
                     'end': end}
 
     # Handle the remaining line. Could recursively call this function if it's
@@ -278,6 +327,9 @@ def vcf_line(input_data, reference):
     else:
         id_field = '.'
 
+    format = 'GT:FT'
+    sample = []
+
     # Is this a matching reference line? Handle per gVCF spec.
     if input_data['ref_seq'] == '=':
         ref_allele = reference[input_data['chrom']][start].upper()
@@ -289,25 +341,98 @@ def vcf_line(input_data, reference):
         vcf_data['ID'] = id_field
         vcf_data['REF'] = ref_allele
         vcf_data['ALT'] = '.'
-        vcf_data['FORMAT'] = 'GT'
+
         assert input_data['allele_count'] in ['1', '2']
         if '?' in input_data['alleles']:
-            if 'NOCALL' not in input_data['filters']:
-                input_data['filters'].append('NOCALL')
-            if input_data['allele_count'] == '2':
-                vcf_data['SAMPLE'] = './.'
-            else:
-                vcf_data['SAMPLE'] = '.'
-        elif input_data['allele_count'] == '2':
-            vcf_data['SAMPLE'] = '0/0'
-        else:
-            vcf_data['SAMPLE'] = '0'
 
-        if input_data['filters']:
-            vcf_data['FILTER'] = ';'.join(input_data['filters'])
+            if ['NOCALL'] not in input_data['filters']:
+                input_data['filters'].append('NOCALL')
+
+            if input_data['allele_count'] == '2':
+                sample.append('./.')
+
+            else:
+                sample.append('.')
+
+        elif input_data['allele_count'] == '2':
+            sample.append('0/0')
+
         else:
-            vcf_data['FILTER'] = 'PASS'
+            sample.append('0')
+
+        if input_data['filters'] and input_data['allele_count'] == '2':
+
+            if input_data['alleles'] in [['?'],['=']] and input_data['filters'] != [[]]:
+                a1_filter = input_data['filters'][0][0]
+                a2_filter = input_data['filters'][0][0]
+                sample.append(a1_filter + ',' + a2_filter)
+
+            elif input_data['filters'] == [[]]:
+                a1_filter = 'PASS'
+                a2_filter = 'PASS'
+                sample.append(a1_filter + ',' + a2_filter)
+
+            else:
+
+                if 'NOCALL' in input_data['filters'][0]:
+                    a1_filter = 'NOCALL'
+                elif 'VQLOW' in input_data['filters'][0]:
+                    a1_filter = 'VQLOW'
+                elif 'AMBIGUOUS' in input_data['filters'][0]:
+                    a1_filter = 'AMBIGUOUS'
+                elif 'VQHIGH' in input_data['filters'][0]:
+                    a1_filter = 'VQHIGH'
+                else:
+                    a1_filter = 'PASS'
+
+                # print(input_data)
+                if 'NOCALL' in input_data['filters'][1]:
+                    a2_filter = 'NOCALL'
+                elif 'VQLOW' in input_data['filters'][1]:
+                    a2_filter = 'VQLOW'
+                elif 'AMBIGUOUS' in input_data['filters'][1]:
+                    a2_filter = 'AMBIGUOUS'
+                elif 'VQHIGH' in input_data['filters'][1]:
+                    a2_filter = 'VQHIGH'
+                else:
+                    a2_filter = 'PASS'
+
+                sample.append(a1_filter + ',' + a2_filter)
+
+            # sample.append(';'.join(input_data['filters']))
+            vcf_data['FILTER'] = '.'
+
+        elif input_data['filters'] and input_data['allele_count'] == '1':
+
+            if 'NOCALL' in input_data['filters'][0]:
+                a1_filter = 'NOCALL'
+            elif 'VQLOW' in input_data['filters'][0]:
+                a1_filter = 'VQLOW'
+            elif 'AMBIGUOUS' in input_data['filters'][0]:
+                a1_filter = 'AMBIGUOUS'
+            elif 'VQHIGH' in input_data['filters'][0]:
+                a1_filter = 'VQHIGH'
+            else:
+                a1_filter = 'PASS'
+
+            vcf_data['FILTER'] = '.'
+            sample.append(a1_filter)
+
+        elif not input_data['filters'] and input_data['allele_count'] == '2':
+            sample.append('PASS,PASS')
+            vcf_data['FILTER'] = '.'
+
+        else: # equivalent to -> elif not input_data['filters'] and input_data['allele_count'] == '1':
+            sample.append('PASS')
+            vcf_data['FILTER'] = '.'
+
+        if input_data['varScores'] and input_data['varScores'] not in [['','','','']]:
+            format = format + ':VAF:EAF'
+            sample.append(':'.join(input_data['varScores']))
+
+        vcf_data['SAMPLE'] = ':'.join(sample)
         vcf_data['INFO'] = 'END={}'.format(input_data['end'])
+        vcf_data['FORMAT'] = format
 
         return formatted_vcf_line(vcf_data)
 
@@ -341,13 +466,85 @@ def vcf_line(input_data, reference):
     vcf_data['ID'] = id_field
     vcf_data['REF'] = ref_allele
     vcf_data['ALT'] = ','.join(alt_alleles)
-    vcf_data['FORMAT'] = 'GT'
-    vcf_data['SAMPLE'] = genotype
 
-    if input_data['filters']:
-        vcf_data['FILTER'] = ';'.join(sorted(input_data['filters']))
-    else:
-        vcf_data['FILTER'] = 'PASS'
+    sample.append(genotype)
+
+    if input_data['filters'] and input_data['allele_count'] == '2':
+        # vcf_data['FILTER'] = ';'.join(sorted(input_data['filters']))
+        # assert 'NOCALL' not in input_data['filters'][0] and 'NOCALL' not in input_data['filters'][1]
+        if 'NOCALL' in input_data['filters'][0]:
+            a1_filter = 'NOCALL'
+        elif 'VQLOW' in input_data['filters'][0]:
+            a1_filter = 'VQLOW'
+        elif 'AMBIGUOUS' in input_data['filters'][0]:
+            a1_filter = 'AMBIGUOUS'
+        elif 'VQHIGH' in input_data['filters'][0]:
+            a1_filter = 'VQHIGH'
+        else:
+            a1_filter = 'PASS'
+
+        if 'NOCALL' in input_data['filters'][1]:
+            a2_filter = 'NOCALL'
+        elif 'VQLOW' in input_data['filters'][1]:
+            a2_filter = 'VQLOW'
+        elif 'AMBIGUOUS' in input_data['filters'][1]:
+            a2_filter = 'AMBIGUOUS'
+        elif 'VQHIGH' in input_data['filters'][1]:
+            a2_filter = 'VQHIGH'
+        else:
+            a2_filter = 'PASS'
+
+        sample.append(a1_filter + ',' + a2_filter)
+
+        vcf_data['FILTER'] = '.'
+
+    elif input_data['filters'] and input_data['allele_count'] == '1':
+
+        if 'VQLOW' in input_data['filters'][0]:
+            a1_filter = 'VQLOW'
+        elif 'AMBIGUOUS' in input_data['filters'][0]:
+            a1_filter = 'AMBIGUOUS'
+        elif 'VQHIGH' in input_data['filters'][0]:
+            a1_filter = 'VQHIGH'
+        else:
+            a1_filter = 'PASS'
+
+        vcf_data['FILTER'] = '.'
+        sample.append(a1_filter)
+
+    elif not input_data['filters'] and input_data['allele_count'] == '2':
+        sample.append('PASS,PASS')
+        vcf_data['FILTER'] = '.'
+
+    else:   # equivalent to -> elif not input_data['filters'] and input_data['allele_count'] == '1':
+        sample.append('PASS')
+        vcf_data['FILTER'] = '.'
+
+    if input_data['varScores'] and input_data['varScores'] not in [['','','','']]:
+
+        assert len(input_data['varScores']) == 2 or len(input_data['varScores']) == 4
+        format = format + ':VAF:EAF'
+
+        if len(input_data['varScores']) == 2:
+            sample.append(':'.join(input_data['varScores']))
+
+        if len(input_data['varScores']) == 4:
+
+            #if a1_vaf_score and a1_eaf_score are missing -> VAF:EAF -> .,X:X,.
+            if input_data['varScores'][0] == '' and input_data['varScores'][1] == '':
+                sample.append('.,' + input_data['varScores'][2])
+                sample.append('.,' + input_data['varScores'][3])
+
+            elif input_data['varScores'][2] == '' and input_data['varScores'][3] == '':
+                sample.append(input_data['varScores'][0] + ',.')
+                sample.append(input_data['varScores'][1] + ',.')
+
+            else:
+                sample.append(','.join(input_data['varScores'][:2]))
+                sample.append(','.join(input_data['varScores'][2:4]))
+
+    vcf_data['SAMPLE'] = ':'.join(sample)
+    vcf_data['FORMAT'] = format
 
     return formatted_vcf_line(vcf_data)
 

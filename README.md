@@ -1,8 +1,16 @@
-# cgivar2gvcf
+# cgivar2gvcf ( ... VAF/EAF scores)
 Conversion of Complete Genomics var file to gVCF
 
 This conversion assumes that the genome file is build 37 and does not currently
 support other builds.
+
+######################################################################################################
+	
+	This modified version of cgivar2gvcf works exactly the same way as the original except that
+	VAF/EAF scores for each allele are recorded in the final VCF output. Similarly, varFilter/VarQuality 
+	tags (VQLOW, AMBIGUOUS, PASS, VQHIGH and NOCALL) are recorded in the genotype fields for each allele. 
+	
+######################################################################################################
 
 ## Installation
 

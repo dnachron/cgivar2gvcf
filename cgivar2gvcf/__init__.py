@@ -10,6 +10,7 @@ import gzip
 import os
 import re
 import sys
+from numpy import median
 
 import twobitreader
 from twobitreader import download as twobitdownload

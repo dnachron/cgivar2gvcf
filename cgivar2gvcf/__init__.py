@@ -505,6 +505,9 @@ def from_command_line():
     parser.add_argument(
         '-v', '--var-only', action='store_true', dest='varonly',
         help='Only report variant lines (i.e. VCF, but not gVCF)')
+    parser.add_argument(
+        '-q', '--qual-scores', action='store_true', dest='qualscores',
+        help='Include VAF and EAF variant quality scores in the output')
     args = parser.parse_args()
 
     # Get local twobit file from its directory. Download and store if needed.
@@ -521,13 +524,15 @@ def from_command_line():
                         args.vcfoutfile,
                         twobit_path,
                         twobit_name,
-                        args.varonly)
+                        args.varonly,
+                        args.qualscores)
     else:
         for line in convert(
                 cgi_input=var_input,
                 twobit_ref=twobit_path,
                 twobit_name=twobit_name,
-                var_only=args.varonly):
+                var_only=args.varonly,
+                qual_scores=args.qualscores):
             print(line)
 
 

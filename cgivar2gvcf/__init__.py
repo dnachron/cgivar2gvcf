@@ -66,7 +66,7 @@ def formatted_vcf_line(vcf_data):
     return '\t'.join([vcf_data[k] for k in vcf_data])
 
 
-def process_full_position(data, header, var_only=False):
+def process_full_position(data, header, var_only=False, qual_scores=False):
     """
     Return genetic data when all alleles called on same line.
 
@@ -101,10 +101,6 @@ def process_full_position(data, header, var_only=False):
     alleles = [data[header['alleleSeq']]]
     dbsnp_data = []
     dbsnp_data = data[header['xRef']].split(';')
-    var_scores = []
-    if data[header['varScoreVAF']] or data[header['varScoreEAF']]:
-        var_scores.append(data[header['varScoreVAF']])
-        var_scores.append(data[header['varScoreEAF']])
     assert data[header['ploidy']] in ['1', '2']
     if feature_type == 'ref' or feature_type == 'no-call':
         return [{'chrom': chrom,
@@ -116,6 +112,11 @@ def process_full_position(data, header, var_only=False):
                  'filters': filters,
                  'end': data[header['end']]}]
     else:
+        var_scores = []
+        assert data[header['varScoreVAF']] and data[header['varScoreEAF']]
+        if qual_scores:
+            var_scores.append(data[header['varScoreVAF']])
+            var_scores.append(data[header['varScoreEAF']])
         return [{'chrom': chrom,
                  'start': start,
                  'dbsnp_data': dbsnp_data,

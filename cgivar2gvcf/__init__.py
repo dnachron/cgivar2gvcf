@@ -254,8 +254,12 @@ def process_split_position(data, cgi_input, header, reference, var_only=False,
         if qual_scores:
             # print(data)
             # print(a1_vaf_score, a2_vaf_score, a1_eaf_score, a2_eaf_score)
-            var_scores = [a1_vaf_score,a2_vaf_score,
-                          a1_eaf_score,a2_eaf_score]
+            if a1_seq == '?':
+                var_scores = [a2_vaf_score + ',' + a1_vaf_score,
+                                a2_eaf_score + ',' + a1_eaf_score]
+            else:
+                var_scores = [a1_vaf_score + ',' + a2_vaf_score,
+                                a1_eaf_score + ',' + a2_eaf_score]
         else:
             var_scores = []
         if (a1_seq != '?') or (a2_seq != '?'):
@@ -398,12 +402,13 @@ def vcf_line(input_data, reference):
         # Case when an unknown/missing '?' allele caused the order of the 
         # genotypes to be switched (e.g. ./1  -> 1/.)
         vcf_data['FORMAT'] = 'GT:VAF:EAF'
-        if genome_alleles[0] == '?':
-            vcf_data['SAMPLE'] = ':'.join([genotype] + 
-                [input_data['var_scores'][1] + input_data['var_scores'][0]] +
-                [input_data['var_scores'][3] + input_data['var_scores'][2]])
-        else:
-            vcf_data['SAMPLE'] = ':'.join([genotype] + input_data['var_scores'])
+        vcf_data['SAMPLE'] = ':'.join([genotype] + input_data['var_scores'])
+        # if genome_alleles[0] == '?':
+        #     vcf_data['SAMPLE'] = ':'.join([genotype] + 
+        #         [input_data['var_scores'][1] + input_data['var_scores'][0]] +
+        #         [input_data['var_scores'][3] + input_data['var_scores'][2]])
+        # else:
+        #     vcf_data['SAMPLE'] = ':'.join([genotype] + input_data['var_scores'])
     else:
         vcf_data['FORMAT'] = 'GT'
         vcf_data['SAMPLE'] = genotype

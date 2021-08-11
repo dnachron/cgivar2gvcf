@@ -160,13 +160,13 @@ def process_allele(allele_data, dbsnp_data, header, reference, qual_scores):
             for dbsnp_item in data[header['xRef']].split(';'):
                 dbsnp_data.append(dbsnp_item.split(':')[1])
         if qual_scores:
-            print("process_allele() -> 1st qual_scores call -> ", qual_scores)
+            # print("process_allele() -> 1st qual_scores call -> ", qual_scores)
             assert data[header['varScoreVAF']] and data[header['varScoreEAF']]
             # print(data[header['varScoreVAF']], data[header['varScoreEAF']])
             vaf_score.append(int(data[header['varScoreVAF']]))
             eaf_score.append(int(data[header['varScoreEAF']]))
     if qual_scores and 'NOCALL' not in filters:
-        print("process_allele() -> 2nd qual_scores call -> ", qual_scores)
+        # print("process_allele() -> 2nd qual_scores call -> ", qual_scores)
         # print("None: ", vaf_score, eaf_score)
         # print(filters)
         # print(data)
@@ -179,8 +179,8 @@ def process_allele(allele_data, dbsnp_data, header, reference, qual_scores):
     if 'NOCALL' in filters:
         filters = ['NOCALL']
         var_allele = '?'
-        print("process_allele() -> ", vaf_score, eaf_score)
-        print("process_allele() -> ", var_allele, ref_allele, start, filters, vaf_score, eaf_score)
+        # print("process_allele() -> ", vaf_score, eaf_score)
+        # print("process_allele() -> ", var_allele, ref_allele, start, filters, vaf_score, eaf_score)
         # assert vaf_score == []
         # assert eaf_score == []
         vaf_score = '.'
@@ -252,8 +252,8 @@ def process_split_position(data, cgi_input, header, reference, var_only=False,
         assert start == a2_start
         # handles quality scores
         if qual_scores:
-            print(data)
-            print(a1_vaf_score, a2_vaf_score, a1_eaf_score, a2_eaf_score)
+            # print(data)
+            # print(a1_vaf_score, a2_vaf_score, a1_eaf_score, a2_eaf_score)
             var_scores = [a1_vaf_score + ',' + a2_vaf_score, 
                           a1_eaf_score + ',' + a2_eaf_score]
         else:

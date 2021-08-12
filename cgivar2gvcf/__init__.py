@@ -41,7 +41,7 @@ maximum likelihood variable allele fraction. This field is empty for reference c
         eaf = """\n##FORMAT=<ID=EAF,Number=R,Type=Integer,Description="Positive or negative integer representing \
 confidence in the call as reported in the varScoreEAF of Complete Genomics. It is derived from the probability \
 estimates under equal allele fraction model. This field is empty for reference calls or no-calls">"""
-        
+
     header = """##fileformat=VCFv4.1
 ##fileDate={}{}{}
 ##source=cgivar2gvcf-version-0.1.9

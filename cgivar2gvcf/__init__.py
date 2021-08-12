@@ -14,6 +14,7 @@ import sys
 import twobitreader
 from twobitreader import download as twobitdownload
 
+
 VCF_DATA_TEMPLATE = OrderedDict([
     ('CHROM', None),
     ('POS', None),

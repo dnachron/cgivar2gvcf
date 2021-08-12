@@ -30,7 +30,19 @@ VCF_DATA_TEMPLATE = OrderedDict([
 FILEDATE = datetime.datetime.now()
 
 
-def make_header(reference):
+def make_header(reference, qual_scores):
+    
+    if qual_scores:
+        VAF = """\n##FORMAT=<ID=VAF,Number=R,Type=Integer,Description="Positive integer representing confidence in the \
+call as reported in the varScoreVAF of Complete Genomics. It is derived from the probability estimates under \
+maximum likelihood variable allele fraction. This field is empty for reference calls or no-calls">"""
+        EAF = """\n##FORMAT=<ID=EAF,Number=R,Type=Integer,Description="Positive or negative integer representing \
+confidence in the call as reported in the varScoreEAF of Complete Genomics. It is derived from the probability \
+estimates under equal allele fraction model. This field is empty for reference calls or no-calls">"""
+    else:
+        VAF = ''
+        EAF = ''
+        
     header = """##fileformat=VCFv4.1
 ##fileDate={}{}{}
 ##source=cgivar2gvcf-version-0.1.9
@@ -40,11 +52,9 @@ def make_header(reference):
 ##FILTER=<ID=NOCALL,Description="Some or all of this record had no sequence call by Complete Genomics">
 ##FILTER=<ID=VQLOW,Description="Some or all of this sequence call marked as low variant quality by Complete Genomics">
 ##FILTER=<ID=AMBIGUOUS,Description="Some or all of this sequence call marked as ambiguous by Complete Genomics">
-##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
-##FORMAT=<ID=VAF,Number=R,Type=Integer,Description="Positive integer representing confidence in the call as reported in the varScoreVAF of Complete Genomics. It is derived from the probability estimates under maximum likelihood variable allele fraction. This field is empty for reference calls or no-calls">
-##FORMAT=<ID=EAF,Number=R,Type=Integer,Description="Positive or negative integer representing confidence in the call as reported in the varScoreEAF of Complete Genomics. It is derived from the probability estimates under equal allele fraction model. This field is empty for reference calls or no-calls">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">{}{}
 ##INFO=<ID=END,Number=1,Type=Integer,Description="Stop position of the interval">
-""".format(FILEDATE.year, FILEDATE.month, FILEDATE.day, reference)
+""".format(FILEDATE.year, FILEDATE.month, FILEDATE.day, reference, VAF, EAF)
     header = header + ("#" + '\t'.join([k for k in VCF_DATA_TEMPLATE]))
     return header
 
@@ -54,7 +64,7 @@ def auto_zip_open(filepath, mode):
     if filepath.endswith('.gz'):
         outfile = gzip.open(filepath, mode)
     elif filepath.endswith('.bz2'):
-        outfile = bz2.BZ2File(filepath, mode)
+        outfile = bz2.BZ2File(filepath, mode)q
     else:
         outfile = open(filepath, mode)
     return outfile
@@ -478,7 +488,9 @@ def convert(cgi_input, twobit_ref, twobit_name, var_only=False,
     reference = twobitreader.TwoBitFile(twobit_ref)
 
     # Output header.
-    header = make_header(twobit_name).split('\n')
+    header = make_header(twobit_name,qual_scores=qual_scores).split('\n')
+    # print(header)
+    # sys.exit()
     for line in header:
         yield line
 

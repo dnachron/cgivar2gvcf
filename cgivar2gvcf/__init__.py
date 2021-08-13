@@ -32,7 +32,6 @@ FILEDATE = datetime.datetime.now()
 
 
 def make_header(reference, qual_scores, cg_header):
-
     vaf, eaf = '', ''
     if qual_scores:
         vaf = """\n##FORMAT=<ID=VAF,Number=R,Type=Integer,Description="Positive integer representing confidence in the \
@@ -458,7 +457,7 @@ def convert(cgi_input, twobit_ref, twobit_name, var_only=False,
 
     # Set up TwoBitFile for retrieving reference sequences.
     reference = twobitreader.TwoBitFile(twobit_ref)
-        
+
     cg_header = {}
     while True:
         line = cgi_input.readline()
@@ -471,7 +470,7 @@ def convert(cgi_input, twobit_ref, twobit_name, var_only=False,
             data = line.lstrip('#').rstrip('\n').split('\t')
             cg_header[data[0]] = '\t'.join(data[1:])
             continue
-        
+
         # Output new header and store cg header row labels.
         if line.startswith('>'):
             header = make_header(twobit_name, qual_scores, cg_header).split('\n')

@@ -6,6 +6,10 @@ support other builds.
 
 ######################################################################################################
 	
+	This branch is buggy and should not be used ! 
+	Use instead the var-eaf_scores_dev branch, which now has an open pull request into the 'main/master'
+	branch of the original repo from madprime
+
 	This modified version of cgivar2gvcf works exactly the same way as the original except that
 	VAF/EAF scores for each allele are recorded in the final VCF output. Similarly, varFilter/VarQuality 
 	tags (VQLOW, AMBIGUOUS, PASS, VQHIGH and NOCALL) are recorded in the genotype fields for each allele. 

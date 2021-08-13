@@ -31,7 +31,7 @@ VCF_DATA_TEMPLATE = OrderedDict([
 FILEDATE = datetime.datetime.now()
 
 
-def make_header(reference, qual_scores):
+def make_header(reference, qual_scores, cg_header):
 
     vaf, eaf = '', ''
     if qual_scores:
@@ -47,13 +47,16 @@ estimates under equal allele fraction model. This field is empty for reference c
 ##source=cgivar2gvcf-version-0.1.9
 ##description="Produced from a Complete Genomics var file using cgivar2gvcf. Not intended for clinical use."
 ##reference={}
+##cg_sample={}
+##cg_software_version={}
+##cg_sample={}
 ##FILTER=<ID=PASS,Description="All filters passed">
 ##FILTER=<ID=NOCALL,Description="Some or all of this record had no sequence call by Complete Genomics">
 ##FILTER=<ID=VQLOW,Description="Some or all of this sequence call marked as low variant quality by Complete Genomics">
 ##FILTER=<ID=AMBIGUOUS,Description="Some or all of this sequence call marked as ambiguous by Complete Genomics">
 ##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">{}{}
 ##INFO=<ID=END,Number=1,Type=Integer,Description="Stop position of the interval">
-""".format(FILEDATE.year, FILEDATE.month, FILEDATE.day, reference, vaf, eaf)
+""".format(FILEDATE.year, FILEDATE.month, FILEDATE.day, reference, cg_header['SAMPLE'], cg_header['SOFTWARE_VERSION'], cg_header['FORMAT_VERSION'], vaf, eaf)
     header = header + ("#" + '\t'.join([k for k in VCF_DATA_TEMPLATE]))
     return header
 
@@ -455,12 +458,8 @@ def convert(cgi_input, twobit_ref, twobit_name, var_only=False,
 
     # Set up TwoBitFile for retrieving reference sequences.
     reference = twobitreader.TwoBitFile(twobit_ref)
-
-    # Output header.
-    header = make_header(twobit_name, qual_scores=qual_scores).split('\n')
-    for line in header:
-        yield line
-
+        
+    cg_header = {}
     while True:
         line = cgi_input.readline()
         if not line:
@@ -469,10 +468,16 @@ def convert(cgi_input, twobit_ref, twobit_name, var_only=False,
 
         # Skip header lines.
         if re.search(r'^\W*$', line) or line.startswith('#'):
+            data = line.lstrip('#').rstrip('\n').split('\t')
+            cg_header[data[0]] = '\t'.join(data[1:])
             continue
-
-        # Store header row labels.
+        
+        # Output new header and store cg header row labels.
         if line.startswith('>'):
+            header = make_header(twobit_name, qual_scores, cg_header).split('\n')
+            for l in header:
+                yield l
+            
             header_data = line.lstrip('>').rstrip('\n').split('\t')
             header = {header_data[i]: i for i in range(len(header_data))}
             continue

@@ -382,16 +382,9 @@ def process_next_position(data, cgi_input, header, reference, var_only):
         out = process_split_position(
             data=data, cgi_input=cgi_input, header=header, reference=reference, var_only=var_only)
     if out:
-
-        # ChrM is skipped because Complete Genomics is using a different
-        # reference than UCSC's reference. Their documentation states:
-        #   The version we use, "build 37," consists of the assembled nuclear
-        #   chromosomes from GRCh37 (not unplaced or alternate loci), plus the
-        #   Cambridge Reference Sequence for the mitochondrion (NC_012920.1).
-        #   This assembly (though with an alternate mitochondrial sequence) is
-        #   also known as UCSC hg19.
-        vcf_lines = [vcf_line(input_data=l, reference=reference) for l in out
-                     if l['chrom'] != 'chrM']
+        # Here we keep the ChrM ,and you should use a exact same "build 37" 
+        #    reference with Complete Genomics
+        vcf_lines = [vcf_line(input_data=l, reference=reference) for l in out]
         return [vl for vl in vcf_lines if not
                (var_only and vl.rstrip().endswith('./.'))]
 

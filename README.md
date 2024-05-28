@@ -18,10 +18,8 @@ You can run this tool on the command line like this:
 
 The above command will display the program's options.
 
-Notably, you need a copy of the UCSC 2bit reference genome to perform conversion.
-The command line tool expects you to provide a directory where this file exists
-(it should have the name `hg19.2bit`). If it's not present, the tool with download
-a copy into this directory.
+**Notably**, you need to build a "build 37" 2 bit reference exact same with Complete Genomics Incorporated (CGI).
+You can refer to the dockerfile in [cgatools-build37-crr](https://github.com/peddamat/cgatools-build37-crr) to build a "build 37 fasta", and then cover it to 2bit fasta with `faToTwoBit` tool from [UCSC](https://genome.ucsc.edu/goldenPath/help/twoBit.html)
 
 An example command for a variant-only VCF file (not gVCF):
 
